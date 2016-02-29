@@ -1,6 +1,5 @@
-// questions:
-// why is the triple (start, end, length) instead of (preimage(end), end)
-// how many processes, how big distinguished points?
+
+// ideally: N^(1/3) processes, N^(2/3) distinguished points
 
 package main
 
@@ -59,7 +58,11 @@ func (sv *server) start(){
 		// if so, see if we have a collision
 		// 	start with the triple with longest length, hash until length becomes the next largest length (length is decreasing as you hash)
 		//	if they're different, keep going; if not, drop one of them (since they're the same)
-		//	if you make it to length = 1 and you still have 3 different values, then you've found a collision!
+		//	continue hasing both of these until the shortest length is reached. at that point, if the three values are all different, 
+		//		hash all three while keeping the previous values. if at any point all three become the same, 
+		//		return their previous values as the collision
+		// 	(if at some point two of them become the same but the third one remains different, we haven't found a collision,
+		//		but we still want to keep all three triples in the list
 		
 		// if you have a collision, announce this and send it out
 		// if not, prune the list of triples (so the next time you check is more efficient)
@@ -73,10 +76,11 @@ func (sv *server) construct_triplets(){
 	// randomly select start location from space of possible hashes, start
 	// s = start, length = 0
 	// keep hashing s until s is a distinguished point (less than N^(2/3)) ; length += 1
-	// end = where s is now
-	// create a triple: start, end, length
-	
-	// send this triple to the server with number (end % (num_processes))
+	// 	or until length = 20 * N / M, where M is the number of distinguished points
+	// if we stopped at a distinguished point
+	// 	end = where s is now
+	// 	create a triple: start, end, length
+	// 	send this triple to the server with number (end % (num_processes))
 	
 	
 }
