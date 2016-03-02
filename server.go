@@ -7,18 +7,24 @@ import (
 	"math/rand"
 	"fmt"
 	"math"
+	//"crypto/sha256" uncomment for implementing hash function
 )
 
+
+var N float64 = math.Exp2(20)
+var M int = int(math.Pow(N,0.666))
+
 type triplet struct{
-	//TODO: fill this out 
-	// start location, end location, number of steps (all ints)
+	Start_location int
+	End_location int
+	Length int 
 }
 
 type server struct{
 	peers []chan triplet
 	me int 
 	num_processors int 
-	stored_triplets []triplet //switch to map from end to []triplet
+	stored_triplets map[int][]triplet //switch to map from end to []triplet
 	rand_generator *rand.Rand
 	reply_channel chan triplet
 }
@@ -37,42 +43,25 @@ func Make(peers []chan triplet, me int, num_processors int, reply_channel chan t
 	sv.me = me
 	sv.num_processors = num_processors
 
+	sv.stored_triplets = make(map[int][]triplet)
+
 	sv.rand_generator = rand.New(rand.NewSource(int64(sv.me)))
 
 	return sv
 }
 
 func (sv *server) start(){
-	fmt.Println("starting server", sv.me)
-
-	//TODO: implement this
+	fmt.Println("starting server", sv.me)	
 	
-	// two threads:
-	// thread one -- computes this server's chain 
-	go sv.construct_triplets()
-	
-	
-	for trip := range(peers[me]){
-		// store triplets recieved, based on end value
-		// check if the list (of triples with this end value) has length >= 3
-		// if so, see if we have a collision
-		// 	start with the triple with longest length, hash until length becomes the next largest length (length is decreasing as you hash)
-		//	if they're different, keep going; if not, drop one of them (since they're the same)
-		//	continue hasing both of these until the shortest length is reached. at that point, if the three values are all different, 
-		//		hash all three while keeping the previous values. if at any point all three become the same, 
-		//		return their previous values as the collision
-		// 	(if at some point two of them become the same but the third one remains different, we haven't found a collision,
-		//		but we still want to keep all three triples in the list
-		
-		// if you have a collision, announce this and send it out
-		// if not, prune the list of triples (so the next time you check is more efficient)
-		
-	}
-	
+	//each time we get a new triplet, store it on this server
+	for trip := range(sv.peers[sv.me]){
+		sv.stored_triplets[trip.End_location] = append(sv.stored_triplets[trip.End_location], trip)
+	}	
 }
 
 
 func (sv *server) construct_triplets(){
+
 	// randomly select start location from space of possible hashes, start
 	// s = start, length = 0
 	// keep hashing s until s is a distinguished point (less than N^(2/3)) ; length += 1
@@ -81,14 +70,43 @@ func (sv *server) construct_triplets(){
 	// 	end = where s is now
 	// 	create a triple: start, end, length
 	// 	send this triple to the server with number (end % (num_processes))
-	
-	
+	start := sv.getRandomStart()
+	Lmax := 20*int(math.Pow(N,0.333))
+	L := 0
+
+	a := start
+	for L < Lmax {
+		L += 1
+		a = Hash(a) 
+
+		if a < M {
+			sv.peers[int(math.Mod(float64(a), float64(N)))] <- triplet{start, a , L}
+		}
+	}
 }
 
 
+func (sv *server) checkForCollisions(){
+
+	//TODO implement this, push collisions to reply channel
+}
+
+	
+
+func (sv *server) getRandomStart() int{
+	return int(sv.rand_generator.Float64()*N)
+}
+
+func Hash(a int) int{
+
+
+	//TODO: implement this
+
+	return 0
+}
+
 
 func main(){
-	N := math.Exp2(20)
 	num_servers := int(math.Pow(N,0.333))
 
 	fmt.Println("Running server to solve puzzle with N:", N)
@@ -109,20 +127,24 @@ func main(){
 	//list of servers 
 	servers := make([]server, num_servers)
 
-	//make a fuckton of servers
+	//make a fuckton of servers and start them spinning for triplets
 	for i := 0; i < num_servers; i++{
 		servers[i] = *Make(channels, i, num_servers, reply_channel)
+		go servers[i].start()
 	}
 
-	//start all servers
+	//make triplets
 	for i:= 0; i < num_servers; i ++{
-		servers[i].start()
+		go servers[i].construct_triplets()
 	}
 
-	fmt.Println("Starting all servers, waiting for results")
+	//once we are done creating triplets, have each server try to find collisions in its set
+	for i:= 0; i < num_servers; i++{
+		go servers[i].checkForCollisions()
+	}
 
 	//print out anything the servers return 
 	for ret := range(reply_channel){
-		fmt.Println("got", ret)
+		fmt.Println("got triplet", ret)
 	}
 }
