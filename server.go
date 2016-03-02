@@ -11,8 +11,17 @@ import (
 )
 
 
+//constants that all the servers can share
 var N float64 = math.Exp2(20)
 var M int = int(math.Pow(N,0.666))
+
+var B block
+
+
+
+type block struct{
+	//TODO fill this in
+}
 
 type triplet struct{
 	Start_location int
@@ -97,16 +106,36 @@ func (sv *server) getRandomStart() int{
 	return int(sv.rand_generator.Float64()*N)
 }
 
+
+
 func Hash(a int) int{
 
 
-	//TODO: implement this
+	//TODO: implement this hashing based on the global block B
 
 	return 0
 }
 
+func pullBlockFromServer() block {
+
+	//TODO: implement this
+	return block{}
+}
+
+func sendToServer(B block){
+
+	//TODO: implement this
+
+}
+
+func addNoncesToBlock(B block, trip triplet){
+	//TODO: implement this
+}
+
 
 func main(){
+
+	B = pullBlockFromServer()
 	num_servers := int(math.Pow(N,0.333))
 
 	fmt.Println("Running server to solve puzzle with N:", N)
@@ -143,8 +172,12 @@ func main(){
 		go servers[i].checkForCollisions()
 	}
 
-	//print out anything the servers return 
+	//if we find a triplet, add it to the block and send the block back to the server
 	for ret := range(reply_channel){
-		fmt.Println("got triplet", ret)
+		addNoncesToBlock(B, ret)
+		sendToServer(B)
 	}
 }
+
+
+
