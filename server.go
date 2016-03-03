@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"fmt"
 	"math"
+	"sort"
 	//"crypto/sha256" uncomment for implementing hash function
 )
 
@@ -27,6 +28,20 @@ type triplet struct{
 	Start_location int
 	End_location int
 	Length int 
+}
+
+type stored_triplets []triplet
+
+//overridden functions needed for sorting triplets by length
+func (s stored_triplets) Len() int {
+    return len(s)
+}
+func (s stored_triplets) Swap(i, j int) {
+    s[i], s[j] = s[j], s[i]
+}
+//flip the order of less to get a reverse sort
+func (s stored_triplets) Less(i, j int) bool {
+    return s[i].Length > s[j].Length
 }
 
 type server struct{
@@ -59,6 +74,13 @@ func Make(peers []chan triplet, me int, num_processors int, reply_channel chan t
 	return sv
 }
 
+
+
+/*
+Method to start a server spinning to recieve triplets. For 
+each triplet recieved, the server adds that triplet to its
+internal data structure, indexed by the end location
+*/
 func (sv *server) start(){
 	fmt.Println("starting server", sv.me)	
 	
@@ -68,7 +90,10 @@ func (sv *server) start(){
 	}	
 }
 
-
+/*
+Method to have a server contruct triplets. See paper for implementation
+details.
+*/
 func (sv *server) construct_triplets(){
 
 	// randomly select start location from space of possible hashes, start
@@ -92,23 +117,50 @@ func (sv *server) construct_triplets(){
 			sv.peers[int(math.Mod(float64(a), float64(N)))] <- triplet{start, a , L}
 		}
 	}
+
+	//signal to main that this construct triplets instance has finished
+	sv.reply_channel <- triplet{}
 }
 
 
-func (sv *server) checkForCollisions(){
 
-	//TODO implement this, push collisions to reply channel
+/*
+Method to check for collison in a single server's stored triplets
+*/
+func (sv *server) checkForCollisions(){
+	for endpoint, triplets := range(sv.stored_triplets){
+		if len(triplets) >= 3{
+			//sort triplets
+			sort.Sort(stored_triplets(triplets))
+
+			c_length := triplets[0].Length
+			index := -1
+			current_values := make([]triplet)
+			for c_length > 0{
+				for index + 1 < len(triplets) && triplets[index + 1].Length == c_length
+			}
+		}
+	}
 }
 
 	
 
+/*
+Method to get a random start value for hashing from the
+server's unique seeded generator
+*/
 func (sv *server) getRandomStart() int{
 	return int(sv.rand_generator.Float64()*N)
 }
 
 
 
-func Hash(a int) int{
+/*
+Given a nonce, compute the hash of this nonce with the 
+context of block. Note that the block B, is stored as a global
+variable to reduce memory
+*/
+func Hash(nonce int) int{
 
 
 	//TODO: implement this hashing based on the global block B
@@ -116,18 +168,31 @@ func Hash(a int) int{
 	return 0
 }
 
+
+/*
+Method to get a block from file. Returns a new block minus
+the 3 nonces
+*/
 func pullBlockFromServer() block {
 
 	//TODO: implement this
 	return block{}
 }
 
+
+/*
+Method to send a block back to file.
+*/
 func sendToServer(B block){
 
 	//TODO: implement this
 
 }
 
+
+/*
+Method to add 3 nonces to a block
+*/
 func addNoncesToBlock(B block, trip triplet){
 	//TODO: implement this
 }
@@ -135,7 +200,14 @@ func addNoncesToBlock(B block, trip triplet){
 
 func main(){
 
+	//get block from server, stored as global variable
 	B = pullBlockFromServer()
+
+	//TODO: set N and M based on difficulty of puzzle
+	//N = 0
+	//M = 0
+
+	//calculate the number of servers based on N
 	num_servers := int(math.Pow(N,0.333))
 
 	fmt.Println("Running server to solve puzzle with N:", N)
@@ -162,15 +234,26 @@ func main(){
 		go servers[i].start()
 	}
 
-	//make triplets
+	// have servers make triplets
 	for i:= 0; i < num_servers; i ++{
 		go servers[i].construct_triplets()
+	}
+
+	fmt.Println("Waiting to finish constructing triplets")
+
+	//wait for construct_triplets() methods to return
+	count := 0
+	for count < int(num_servers) {
+		<- reply_channel
+		count += 1
 	}
 
 	//once we are done creating triplets, have each server try to find collisions in its set
 	for i:= 0; i < num_servers; i++{
 		go servers[i].checkForCollisions()
 	}
+
+	fmt.Println("Waiting for collison checking")
 
 	//if we find a triplet, add it to the block and send the block back to the server
 	for ret := range(reply_channel){
